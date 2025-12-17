@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Relógio de Horas Planetárias</title>
+  <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .card {
+      background: #020617;
+      padding: 24px;
+      border-radius: 16px;
+      width: 360px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 12px;
+    }
+
+    .time {
+      font-size: 28px;
+      margin: 12px 0;
+    }
+
+    .planet {
+      font-size: 18px;
+      margin-top: 8px;
+    }
+
+    .planet-img {
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 50%;
+      margin: 12px auto;
+      display: block;
+      box-shadow: 0 0 20px rgba(255,255,255,0.15);
+    }
+
+    .planet-img.small {
+      width: 80px;
+      height: 80px;
+      margin-top: 6px;
+    }
+
+    .small-text {
+      font-size: 12px;
+      opacity: 0.7;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>☀️ Relógio Planetário Solar</h1>
+
+    <div class="time" id="clock">--:--:--</div>
+
+    <img id="hourImage" class="planet-img" src="" alt="Planeta da Hora">
+
+    <div class="planet" id="planet">Calculando…</div>
+
+    <img id="dayImage" class="planet-img small" src="" alt="Planeta do Dia">
+
+    <div class="planet" id="dayPlanet">Dia Planetário: —</div>
+
+    <div class="small-text">
+      Horas planetárias reais • Baseadas no nascer e pôr do Sol
+    </div>
+  </div>
+
+  <script>
+    // Ordem caldaica (lenta → rápida)
+    const caldeanOrder = [
+      'Saturno', 'Júpiter', 'Marte', 'Sol', 'Vênus', 'Mercúrio', 'Lua'
+    ];
+
+    // Regente do dia = planeta da 1ª hora após o nascer do Sol
+    const dayRulerByWeekday = {
+      0: 'Sol',
+      1: 'Lua',
+      2: 'Marte',
+      3: 'Mercúrio',
+      4: 'Júpiter',
+      5: 'Vênus',
+      6: 'Saturno'
+    };
+
+    const planetImages = {
+      'Sol': 'https://upload.wikimedia.org/wikipedia/commons/c/c3/Solar_sys8.jpg',
+      'Lua': 'https://upload.wikimedia.org/wikipedia/commons/e/e1/FullMoon2010.jpg',
+      'Marte': 'https://upload.wikimedia.org/wikipedia/commons/0/02/OSIRIS_Mars_true_color.jpg',
+      'Mercúrio': 'https://upload.wikimedia.org/wikipedia/commons/4/4a/Mercury_in_true_color.jpg',
+      'Júpiter': 'https://upload.wikimedia.org/wikipedia/commons/e/e2/Jupiter.jpg',
+      'Vênus': 'https://upload.wikimedia.org/wikipedia/commons/e/e5/Venus-real_color.jpg',
+      'Saturno': 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Saturn_during_Equinox.jpg'
+    };
+
+    function getPlanetaryInfo(now, lat, lon) {
+      let solarDate = new Date(now);
+      let times = SunCalc.getTimes(solarDate, lat, lon);
+
+      // Se ainda não nasceu o Sol → pertence ao dia solar anterior
+      if (now < times.sunrise) {
+        solarDate.setDate(solarDate.getDate() - 1);
+        times = SunCalc.getTimes(solarDate, lat, lon);
+      }
+
+      const sunrise = times.sunrise;
+      const sunset = times.sunset;
+
+      const nextSunrise = SunCalc.getTimes(
+        new Date(solarDate.getTime() + 86400000),
+        lat,
+        lon
+      ).sunrise;
+
+      // Duração real
+      const dayLength = sunset - sunrise;
+      const nightLength = nextSunrise - sunset;
+
+      const dayHour = dayLength / 12;
+      const nightHour = nightLength / 12;
+
+      let hourIndex;
+      let period;
+
+      if (now >= sunrise && now < sunset) {
+        hourIndex = Math.floor((now - sunrise) / dayHour);
+        period = 'Diurna';
+      } else {
+        hourIndex = 12 + Math.floor((now - sunset) / nightHour);
+        period = 'Noturna';
+      }
+
+      if (hourIndex > 23) hourIndex = 23;
+
+      const dayRuler = dayRulerByWeekday[solarDate.getDay()];
+      const startIndex = caldeanOrder.indexOf(dayRuler);
+
+      const planetOfHour =
+        caldeanOrder[(startIndex + hourIndex) % 7];
+
+      return {
+        planet: planetOfHour,
+        hour: hourIndex + 1,
+        period,
+        dayRuler
+      };
+    }
+
+    function startClock(lat, lon) {
+      setInterval(() => {
+        const now = new Date();
+
+        document.getElementById('clock').textContent =
+          now.toLocaleTimeString('pt-BR');
+
+        const info = getPlanetaryInfo(now, lat, lon);
+
+        document.getElementById('planet').textContent =
+          `Hora ${info.hour} ${info.period} — Regente: ${info.planet}`;
+
+        document.getElementById('dayPlanet').textContent =
+          `Dia Planetário — Regente: ${info.dayRuler}`;
+
+        document.getElementById('hourImage').src =
+          planetImages[info.planet];
+
+        document.getElementById('dayImage').src =
+          planetImages[info.dayRuler];
+
+      }, 1000);
+    }
+
+    // Geolocalização
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => startClock(pos.coords.latitude, pos.coords.longitude),
+        () => startClock(-23.5505, -46.6333) // fallback São Paulo
+      );
+    } else {
+      startClock(-23.5505, -46.6333);
+    }
+  </script>
+</body>
+</html>
+
